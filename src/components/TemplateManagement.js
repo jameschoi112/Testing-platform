@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, FilePlus, ChevronDown, MoreVertical, FileText, Calendar, Hash } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, doc, deleteDoc } from 'firebase/firestore';
@@ -73,86 +72,66 @@ const TemplateManagement = () => {
 
   return (
     <div className="flex-1 p-6 md:p-8 bg-cool-gray-50 dark:bg-cool-gray-900 overflow-y-auto">
-      <motion.header
-        className="flex justify-between items-center mb-8"
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
+      <header className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-slate-800 to-sky-600 dark:from-white dark:to-sky-300 bg-clip-text text-transparent tracking-tight">
             템플릿 관리
           </h1>
-          <p className="text-gray-500 dark:text-gray-400">재사용 가능한 테스트 템플릿을 만들고 관리하세요.</p>
+
         </div>
-        <motion.button
+        <button
           onClick={() => setIsFormVisible(!isFormVisible)}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
           className="flex items-center space-x-2 px-4 py-2 bg-sky-600 text-white rounded-lg shadow-sm hover:bg-sky-700 transition-colors"
         >
           <FilePlus size={20} />
           <span>{isFormVisible ? '폼 닫기' : '새 템플릿 만들기'}</span>
-        </motion.button>
-      </motion.header>
+        </button>
+      </header>
 
-      <AnimatePresence>
-        {isFormVisible && (
-          <motion.div
-            className="bg-white dark:bg-cool-gray-800 p-6 rounded-xl shadow-md mb-8"
-            initial={{ opacity: 0, y: -20, height: 0 }}
-            animate={{ opacity: 1, y: 0, height: 'auto' }}
-            exit={{ opacity: 0, y: -20, height: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">새 템플릿 만들기</h2>
-            <div className="space-y-4">
-              <input
-                type="text"
-                placeholder="템플릿 이름 (예: 로그인 시나리오)"
-                value={newTemplateName}
-                onChange={(e) => setNewTemplateName(e.target.value)}
-                className="w-full px-4 py-2 border border-cool-gray-200 dark:border-cool-gray-600 rounded-lg bg-cool-gray-50 dark:bg-cool-gray-700"
-              />
-              <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 pt-2">테스트 스텝</h3>
-              {steps.map((step, index) => (
-                <div key={step.id} className="flex items-center space-x-2">
-                  <span className="text-gray-500">{index + 1}.</span>
-                  <input
-                    type="text"
-                    placeholder={`스텝 ${index + 1} 설명`}
-                    value={step.name}
-                    onChange={(e) => handleStepNameChange(step.id, e.target.value)}
-                    className="flex-grow px-4 py-2 border border-cool-gray-200 dark:border-cool-gray-600 rounded-lg bg-cool-gray-50 dark:bg-cool-gray-700"
-                  />
-                  <button onClick={() => handleRemoveStep(step.id)} className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-full">
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))}
-              <button onClick={handleAddStep} className="flex items-center space-x-2 text-sky-600 hover:text-sky-800">
-                <Plus size={16} />
-                <span>스텝 추가</span>
-              </button>
-            </div>
-            <div className="flex justify-end space-x-4 mt-6">
-              <button onClick={() => setIsFormVisible(false)} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors">
-                취소
-              </button>
-              <button onClick={handleSaveTemplate} className="px-4 py-2 bg-sky-600 text-white rounded-lg shadow-sm hover:bg-sky-700 transition-colors">
-                템플릿 저장
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {isFormVisible && (
+        <div className="bg-white dark:bg-cool-gray-800 p-6 rounded-xl shadow-md mb-8">
+          <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">새 템플릿 만들기</h2>
+          <div className="space-y-4">
+            <input
+              type="text"
+              placeholder="템플릿 이름 (예: 로그인 시나리오)"
+              value={newTemplateName}
+              onChange={(e) => setNewTemplateName(e.target.value)}
+              className="w-full px-4 py-2 border border-cool-gray-200 dark:border-cool-gray-600 rounded-lg bg-cool-gray-50 dark:bg-cool-gray-700"
+            />
+            <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 pt-2">테스트 스텝</h3>
+            {steps.map((step, index) => (
+              <div key={step.id} className="flex items-center space-x-2">
+                <span className="text-gray-500">{index + 1}.</span>
+                <input
+                  type="text"
+                  placeholder={`스텝 ${index + 1} 설명`}
+                  value={step.name}
+                  onChange={(e) => handleStepNameChange(step.id, e.target.value)}
+                  className="flex-grow px-4 py-2 border border-cool-gray-200 dark:border-cool-gray-600 rounded-lg bg-cool-gray-50 dark:bg-cool-gray-700"
+                />
+                <button onClick={() => handleRemoveStep(step.id)} className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-full">
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+            <button onClick={handleAddStep} className="flex items-center space-x-2 text-sky-600 hover:text-sky-800">
+              <Plus size={16} />
+              <span>스텝 추가</span>
+            </button>
+          </div>
+          <div className="flex justify-end space-x-4 mt-6">
+            <button onClick={() => setIsFormVisible(false)} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors">
+              취소
+            </button>
+            <button onClick={handleSaveTemplate} className="px-4 py-2 bg-sky-600 text-white rounded-lg shadow-sm hover:bg-sky-700 transition-colors">
+              템플릿 저장
+            </button>
+          </div>
+        </div>
+      )}
 
-      <motion.div
-        className="bg-white dark:bg-cool-gray-800 p-6 rounded-xl shadow-sm"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.1 }}
-      >
+      <div className="bg-white dark:bg-cool-gray-800 p-6 rounded-xl shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
             <thead className="text-xs text-gray-700 uppercase bg-cool-gray-50 dark:bg-cool-gray-700 dark:text-gray-400">
@@ -181,26 +160,20 @@ const TemplateManagement = () => {
                       </button>
                     </td>
                   </tr>
-                  <AnimatePresence>
-                    {expandedTemplateId === template.id && (
-                      <motion.tr
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                      >
-                        <td colSpan="4" className="p-4 bg-cool-gray-50 dark:bg-cool-gray-700/50">
-                          <div className="p-4 rounded-lg bg-white dark:bg-cool-gray-800 shadow-inner">
-                            <h4 className="font-bold mb-3 text-gray-800 dark:text-white">테스트 스텝</h4>
-                            <ol className="list-decimal list-inside text-sm text-gray-600 dark:text-gray-400 space-y-2">
-                              {template.steps.map((step, index) => (
-                                <li key={index} className="p-2 rounded-md bg-cool-gray-100 dark:bg-cool-gray-700">{step}</li>
-                              ))}
-                            </ol>
-                          </div>
-                        </td>
-                      </motion.tr>
-                    )}
-                  </AnimatePresence>
+                  {expandedTemplateId === template.id && (
+                    <tr>
+                      <td colSpan="4" className="p-4 bg-cool-gray-50 dark:bg-cool-gray-700/50">
+                        <div className="p-4 rounded-lg bg-white dark:bg-cool-gray-800 shadow-inner">
+                          <h4 className="font-bold mb-3 text-gray-800 dark:text-white">테스트 스텝</h4>
+                          <ol className="list-decimal list-inside text-sm text-gray-600 dark:text-gray-400 space-y-2">
+                            {template.steps.map((step, index) => (
+                              <li key={index} className="p-2 rounded-md bg-cool-gray-100 dark:bg-cool-gray-700">{step}</li>
+                            ))}
+                          </ol>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
                 </React.Fragment>
               )) : (
                 <tr>
@@ -212,7 +185,7 @@ const TemplateManagement = () => {
             </tbody>
           </table>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 };

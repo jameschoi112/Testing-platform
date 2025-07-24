@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Edit3, Trash2, Calendar, Clock, Tag, Palette, Play, Users, Target } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Edit3, Trash2, Calendar, Clock, Palette, Play, Users, Target } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { db } from '../firebase';
+import { collection, addDoc, deleteDoc, doc, updateDoc, onSnapshot, serverTimestamp, query, orderBy } from 'firebase/firestore';
 
 const GlassCard = ({ children, className = "", delay = 0 }) => {
   const [isVisible, setIsVisible] = useState(false);
@@ -82,42 +84,37 @@ const TestSchedule = ({ darkMode = false }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [eventTitle, setEventTitle] = useState('');
   const [eventDetails, setEventDetails] = useState('');
-  const [eventType, setEventType] = useState('Regression');
   const [eventColor, setEventColor] = useState('#6366f1');
   const [selectedDate, setSelectedDate] = useState(null);
 
-  // Mock data for demonstration
+  // 새로 추가된 상태
+  const [startDate, setStartDate] = useState(null);
+  const [endDate, setEndDate] = useState(null);
+  const [isOneDay, setIsOneDay] = useState(true);
+  const [startTime, setStartTime] = useState('09:00');
+  const [endTime, setEndTime] = useState('10:00');
+  const [noTime, setNoTime] = useState(false);
+
+  // Firebase에서 일정 데이터 가져오기
   useEffect(() => {
-    const mockEvents = [
-      {
-        id: '1',
-        title: 'API Regression Test',
-        details: 'Complete API regression testing for v2.0',
-        type: 'Regression',
-        color: '#6366f1',
-        start: new Date(2025, 6, 18),
-        end: new Date(2025, 6, 18)
-      },
-      {
-        id: '2',
-        title: 'Smoke Test',
-        details: 'Quick smoke test after deployment',
-        type: 'Smoke',
-        color: '#10b981',
-        start: new Date(2025, 6, 20),
-        end: new Date(2025, 6, 20)
-      },
-      {
-        id: '3',
-        title: 'Performance Testing',
-        details: 'Load testing for new features',
-        type: 'Performance',
-        color: '#f59e0b',
-        start: new Date(2025, 6, 22),
-        end: new Date(2025, 6, 22)
-      }
-    ];
-    setEvents(mockEvents);
+    const q = query(collection(db, "schedules"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const eventsData = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          title: data.title,
+          details: data.details,
+          color: data.color,
+          start: data.start.toDate(),
+          end: data.end.toDate(),
+          createdAt: data.createdAt
+        };
+      });
+      setEvents(eventsData);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const formatDate = (date) => {
@@ -141,49 +138,120 @@ const TestSchedule = ({ darkMode = false }) => {
 
   const handleDayClick = (day) => {
     setSelectedDate(day);
+    setStartDate(day);
+    setEndDate(day);
     setSelectedEvent(null);
     setEventTitle('');
     setEventDetails('');
-    setEventType('Regression');
     setEventColor('#6366f1');
+    setIsOneDay(true);
+    setStartTime('09:00');
+    setEndTime('10:00');
+    setNoTime(false);
     setIsModalOpen(true);
   };
 
   const handleEventClick = (event) => {
     setSelectedEvent(event);
     setSelectedDate(event.start);
+    setStartDate(event.start);
+    setEndDate(event.end);
     setEventTitle(event.title);
     setEventDetails(event.details || '');
-    setEventType(event.type || 'Regression');
     setEventColor(event.color || '#6366f1');
+
+    // 날짜가 같은지 확인
+    const isSameDay = event.start.toDateString() === event.end.toDateString();
+    setIsOneDay(isSameDay);
+
+    // 시간 설정 확인
+    const hasTime = event.start.getHours() !== 0 || event.start.getMinutes() !== 0 ||
+                    event.end.getHours() !== 23 || event.end.getMinutes() !== 59;
+    setNoTime(!hasTime);
+
+    if (hasTime) {
+      setStartTime(`${event.start.getHours().toString().padStart(2, '0')}:${event.start.getMinutes().toString().padStart(2, '0')}`);
+      setEndTime(`${event.end.getHours().toString().padStart(2, '0')}:${event.end.getMinutes().toString().padStart(2, '0')}`);
+    } else {
+      setStartTime('09:00');
+      setEndTime('10:00');
+    }
+
     setIsModalOpen(true);
   };
 
-  const handleSave = () => {
-    if (eventTitle) {
-      const data = {
-        id: selectedEvent?.id || Date.now().toString(),
+  const handleSave = async () => {
+    if (!eventTitle.trim()) {
+      alert('일정 제목을 입력해주세요.');
+      return;
+    }
+
+    if (!isOneDay && (!startDate || !endDate)) {
+      alert('시작일과 종료일을 선택해주세요.');
+      return;
+    }
+
+    try {
+      let finalStartDate, finalEndDate;
+
+      if (isOneDay) {
+        finalStartDate = new Date(selectedDate);
+        finalEndDate = new Date(selectedDate);
+      } else {
+        finalStartDate = new Date(startDate);
+        finalEndDate = new Date(endDate);
+      }
+
+      if (!noTime) {
+        // 시간이 설정된 경우
+        const [startHour, startMinute] = startTime.split(':');
+        const [endHour, endMinute] = endTime.split(':');
+
+        finalStartDate.setHours(parseInt(startHour), parseInt(startMinute), 0, 0);
+
+        if (isOneDay) {
+          finalEndDate.setHours(parseInt(endHour), parseInt(endMinute), 0, 0);
+        } else {
+          finalEndDate.setHours(parseInt(endHour), parseInt(endMinute), 0, 0);
+        }
+      } else {
+        // 시간이 설정되지 않은 경우 (종일)
+        finalStartDate.setHours(0, 0, 0, 0);
+        finalEndDate.setHours(23, 59, 59, 999);
+      }
+
+      const eventData = {
         title: eventTitle,
         details: eventDetails,
-        type: eventType,
         color: eventColor,
-        start: selectedDate,
-        end: selectedDate,
+        start: finalStartDate,
+        end: finalEndDate,
+        createdAt: serverTimestamp(),
       };
 
       if (selectedEvent) {
-        setEvents(events.map(e => e.id === selectedEvent.id ? data : e));
+        // 수정
+        await updateDoc(doc(db, 'schedules', selectedEvent.id), eventData);
       } else {
-        setEvents([...events, data]);
+        // 추가
+        await addDoc(collection(db, 'schedules'), eventData);
       }
       setIsModalOpen(false);
+    } catch (error) {
+      console.error("Error saving event: ", error);
+      alert('일정 저장 중 오류가 발생했습니다.');
     }
   };
 
-  const handleDelete = () => {
-    if (selectedEvent) {
-      setEvents(events.filter(e => e.id !== selectedEvent.id));
-      setIsModalOpen(false);
+  const handleDelete = async () => {
+    if (selectedEvent && window.confirm('정말로 이 일정을 삭제하시겠습니까?')) {
+      try {
+        await deleteDoc(doc(db, 'schedules', selectedEvent.id));
+        setIsModalOpen(false);
+      } catch (error) {
+        console.error("Error deleting event: ", error);
+        alert('일정 삭제 중 오류가 발생했습니다.');
+      }
     }
   };
 
@@ -222,14 +290,46 @@ const TestSchedule = ({ darkMode = false }) => {
   };
 
   const getEventsForDay = (date) => {
-    return events.filter(event => isSameDay(event.start, date));
+    return events.filter(event => {
+      const eventStart = new Date(event.start);
+      const eventEnd = new Date(event.end);
+      const targetDate = new Date(date);
+
+      // 날짜만 비교 (시간 제외)
+      eventStart.setHours(0, 0, 0, 0);
+      eventEnd.setHours(23, 59, 59, 999);
+      targetDate.setHours(0, 0, 0, 0);
+
+      return targetDate >= eventStart && targetDate <= eventEnd;
+    });
   };
 
-  const typeIcons = {
-    Regression: '🔄',
-    Smoke: '💨',
-    Performance: '⚡',
-    Security: '🔒'
+  const getTodayEvents = () => {
+    const today = new Date();
+    return events.filter(event => isSameDay(event.start, today))
+                 .sort((a, b) => a.start - b.start);
+  };
+
+  const getThisWeekEventsCount = () => {
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay());
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+    return events.filter(event => {
+      const eventDate = event.start;
+      return eventDate >= startOfWeek && eventDate <= endOfWeek;
+    }).length;
+  };
+
+  const getThisMonthEventsCount = () => {
+    const today = new Date();
+    return events.filter(event => {
+      const eventDate = event.start;
+      return eventDate.getMonth() === today.getMonth() &&
+             eventDate.getFullYear() === today.getFullYear();
+    }).length;
   };
 
   return (
@@ -262,42 +362,33 @@ const TestSchedule = ({ darkMode = false }) => {
       </motion.header>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 relative z-10">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 relative z-10">
         <StatCard
           icon={<Calendar />}
-          title="이번 달 총 테스트"
-          value="12"
-          subtitle="지난 달 대비 +3"
+          title="이번 달 총 일정"
+          value={getThisMonthEventsCount()}
+          subtitle="예정된 테스트 일정"
           gradient="from-sky-500 to-blue-600"
           accentColor="#0ea5e9"
           delay={0}
         />
         <StatCard
           icon={<Play />}
-          title="진행 중인 테스트"
-          value="3"
-          subtitle="오늘 2개 예정"
+          title="오늘의 일정"
+          value={getTodayEvents().length}
+          subtitle="오늘 예정된 일정"
           gradient="from-blue-500 to-indigo-600"
           accentColor="#3b82f6"
           delay={100}
         />
         <StatCard
           icon={<Users />}
-          title="참여 팀원"
-          value="8"
-          subtitle="활성 사용자"
+          title="이번 주 일정"
+          value={getThisWeekEventsCount()}
+          subtitle="이번 주 전체 일정"
           gradient="from-cyan-500 to-sky-600"
           accentColor="#06b6d4"
           delay={200}
-        />
-        <StatCard
-          icon={<Target />}
-          title="완료율"
-          value="94%"
-          subtitle="목표: 95%"
-          gradient="from-emerald-500 to-teal-600"
-          accentColor="#10b981"
-          delay={300}
         />
       </div>
 
@@ -346,12 +437,18 @@ const TestSchedule = ({ darkMode = false }) => {
 
                 <motion.button
                   onClick={() => {
-                    setSelectedDate(new Date());
+                    const today = new Date();
+                    setSelectedDate(today);
+                    setStartDate(today);
+                    setEndDate(today);
                     setSelectedEvent(null);
                     setEventTitle('');
                     setEventDetails('');
-                    setEventType('Regression');
                     setEventColor('#6366f1');
+                    setIsOneDay(true);
+                    setStartTime('09:00');
+                    setEndTime('10:00');
+                    setNoTime(false);
                     setIsModalOpen(true);
                   }}
                   whileHover={{ scale: 1.05 }}
@@ -433,11 +530,10 @@ const TestSchedule = ({ darkMode = false }) => {
                                 handleEventClick(event);
                               }}
                               whileHover={{ scale: 1.05 }}
-                              className="text-xs px-2 py-1 rounded-md cursor-pointer backdrop-blur-sm text-white font-medium flex items-center space-x-1 truncate"
+                              className="text-xs px-2 py-1 rounded-md cursor-pointer backdrop-blur-sm text-white font-medium truncate"
                               style={{ backgroundColor: event.color + 'CC' }}
                             >
-                              <span className="flex-shrink-0">{typeIcons[event.type] || '📝'}</span>
-                              <span className="truncate">{event.title}</span>
+                              {event.title}
                             </motion.div>
                           ))}
 
@@ -466,57 +562,36 @@ const TestSchedule = ({ darkMode = false }) => {
                 <span>오늘의 일정</span>
               </h3>
               <div className="space-y-3">
-                {events
-                  .filter(event => isSameDay(event.start, new Date()))
-                  .map((event) => (
-                    <motion.div
-                      key={event.id}
-                      onClick={() => handleEventClick(event)}
-                      whileHover={{ scale: 1.02 }}
-                      className="p-3 rounded-lg bg-white/20 dark:bg-slate-700/30 border border-white/20 dark:border-slate-600/30 cursor-pointer backdrop-blur-sm"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <div
-                          className="w-3 h-3 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: event.color }}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-slate-700 dark:text-white truncate">
-                            {event.title}
+                {getTodayEvents().map((event) => (
+                  <motion.div
+                    key={event.id}
+                    onClick={() => handleEventClick(event)}
+                    whileHover={{ scale: 1.02 }}
+                    className="p-3 rounded-lg bg-white/20 dark:bg-slate-700/30 border border-white/20 dark:border-slate-600/30 cursor-pointer backdrop-blur-sm"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div
+                        className="w-3 h-3 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: event.color }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-700 dark:text-white truncate">
+                          {event.title}
+                        </p>
+                        {event.details && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                            {event.details}
                           </p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            {event.type}
-                          </p>
-                        </div>
+                        )}
                       </div>
-                    </motion.div>
-                  ))}
-                {events.filter(event => isSameDay(event.start, new Date())).length === 0 && (
+                    </div>
+                  </motion.div>
+                ))}
+                {getTodayEvents().length === 0 && (
                   <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">
-                    오늘 예정된 테스트가 없습니다
+                    오늘 예정된 일정이 없습니다
                   </p>
                 )}
-              </div>
-            </div>
-          </GlassCard>
-
-          {/* Quick Stats */}
-          <GlassCard delay={700}>
-            <div className="p-6">
-              <h3 className="text-lg font-semibold text-slate-700 dark:text-white mb-4">빠른 통계</h3>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500 dark:text-slate-400 text-sm">이번 주</span>
-                  <span className="text-sky-500 font-bold">5개</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500 dark:text-slate-400 text-sm">이번 달</span>
-                  <span className="text-blue-500 font-bold">12개</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500 dark:text-slate-400 text-sm">성공률</span>
-                  <span className="text-emerald-500 font-bold">94%</span>
-                </div>
               </div>
             </div>
           </GlassCard>
@@ -574,43 +649,120 @@ const TestSchedule = ({ darkMode = false }) => {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">
-                        <Tag className="inline h-4 w-4 mr-1" />
-                        테스트 유형
-                      </label>
-                      <select
-                        value={eventType}
-                        onChange={(e) => setEventType(e.target.value)}
-                        className="w-full px-4 py-3 rounded-lg border border-white/20 bg-white/50 dark:bg-slate-700/50 dark:border-slate-600/50 text-slate-900 dark:text-white backdrop-blur-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
-                      >
-                        <option value="Regression">Regression</option>
-                        <option value="Smoke">Smoke</option>
-                        <option value="Performance">Performance</option>
-                        <option value="Security">Security</option>
-                      </select>
-                    </div>
+                  {/* 하루만 체크박스 */}
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="checkbox"
+                      id="isOneDay"
+                      checked={isOneDay}
+                      onChange={(e) => setIsOneDay(e.target.checked)}
+                      className="w-4 h-4 text-sky-600 bg-gray-100 border-gray-300 rounded focus:ring-sky-500"
+                    />
+                    <label htmlFor="isOneDay" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      하루만
+                    </label>
+                  </div>
 
+                  {/* 날짜 선택 */}
+                  {isOneDay ? (
                     <div>
                       <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">
-                        <Palette className="inline h-4 w-4 mr-1" />
-                        색상
+                        날짜
                       </label>
-                      <div className="flex space-x-2 pt-2">
-                        {['#6366f1', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4'].map(color => (
-                          <motion.button
-                            key={color}
-                            onClick={() => setEventColor(color)}
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                            className={`w-8 h-8 rounded-full transition-all ${
-                              eventColor === color ? 'ring-2 ring-offset-2 ring-sky-500 ring-offset-white dark:ring-offset-slate-800' : ''
-                            }`}
-                            style={{ backgroundColor: color }}
-                          />
-                        ))}
+                      <input
+                        type="date"
+                        value={selectedDate ? selectedDate.toISOString().split('T')[0] : ''}
+                        onChange={(e) => setSelectedDate(new Date(e.target.value))}
+                        className="w-full px-4 py-3 rounded-lg border border-white/20 bg-white/50 dark:bg-slate-700/50 dark:border-slate-600/50 text-slate-900 dark:text-white backdrop-blur-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
+                      />
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">
+                          시작일
+                        </label>
+                        <input
+                          type="date"
+                          value={startDate ? startDate.toISOString().split('T')[0] : ''}
+                          onChange={(e) => setStartDate(new Date(e.target.value))}
+                          className="w-full px-4 py-3 rounded-lg border border-white/20 bg-white/50 dark:bg-slate-700/50 dark:border-slate-600/50 text-slate-900 dark:text-white backdrop-blur-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
+                        />
                       </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">
+                          종료일
+                        </label>
+                        <input
+                          type="date"
+                          value={endDate ? endDate.toISOString().split('T')[0] : ''}
+                          onChange={(e) => setEndDate(new Date(e.target.value))}
+                          className="w-full px-4 py-3 rounded-lg border border-white/20 bg-white/50 dark:bg-slate-700/50 dark:border-slate-600/50 text-slate-900 dark:text-white backdrop-blur-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 시간 설정 안함 체크박스 */}
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="checkbox"
+                      id="noTime"
+                      checked={noTime}
+                      onChange={(e) => setNoTime(e.target.checked)}
+                      className="w-4 h-4 text-sky-600 bg-gray-100 border-gray-300 rounded focus:ring-sky-500"
+                    />
+                    <label htmlFor="noTime" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      시간 설정 안함 (종일)
+                    </label>
+                  </div>
+
+                  {/* 시간 선택 */}
+                  {!noTime && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">
+                          시작 시간
+                        </label>
+                        <input
+                          type="time"
+                          value={startTime}
+                          onChange={(e) => setStartTime(e.target.value)}
+                          className="w-full px-4 py-3 rounded-lg border border-white/20 bg-white/50 dark:bg-slate-700/50 dark:border-slate-600/50 text-slate-900 dark:text-white backdrop-blur-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">
+                          종료 시간
+                        </label>
+                        <input
+                          type="time"
+                          value={endTime}
+                          onChange={(e) => setEndTime(e.target.value)}
+                          className="w-full px-4 py-3 rounded-lg border border-white/20 bg-white/50 dark:bg-slate-700/50 dark:border-slate-600/50 text-slate-900 dark:text-white backdrop-blur-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">
+                      <Palette className="inline h-4 w-4 mr-1" />
+                      색상
+                    </label>
+                    <div className="flex space-x-2 pt-2">
+                      {['#6366f1', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4'].map(color => (
+                        <motion.button
+                          key={color}
+                          onClick={() => setEventColor(color)}
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          className={`w-8 h-8 rounded-full transition-all ${
+                            eventColor === color ? 'ring-2 ring-offset-2 ring-sky-500 ring-offset-white dark:ring-offset-slate-800' : ''
+                          }`}
+                          style={{ backgroundColor: color }}
+                        />
+                      ))}
                     </div>
                   </div>
                 </div>

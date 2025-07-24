@@ -1,7 +1,6 @@
 export const translations = {
   ko: {
     title: '말레이시아 AI 챗봇 어드민',
-    systemOnline: 'System Online',
     admin: '관리자',
     dashboard: '대시보드',
     userManagement: '테스트 목록',

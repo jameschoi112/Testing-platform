@@ -8,18 +8,52 @@ const { spawn } = require('child_process');
 const fs = require('fs/promises');
 const admin = require('firebase-admin');
 
-// .env 파일에 GOOGLE_APPLICATION_CREDENTIALS 설정 필요
-// 예: GOOGLE_APPLICATION_CREDENTIALS="./dodlin-test-platform-firebase-adminsdk-b1hmy-9809e8165f.json"
-admin.initializeApp({
-  credential: admin.credential.applicationDefault(),
-  storageBucket: process.env.REACT_APP_STORAGE_BUCKET
-});
+// Firebase Admin 초기화 개선
+let app;
+try {
+  // 이미 초기화된 앱이 있는지 확인
+  app = admin.app();
+} catch (error) {
+  // 서비스 계정 키 파일 경로 확인
+  const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  console.log('Service account path:', serviceAccountPath);
+
+  if (!serviceAccountPath) {
+    console.error('GOOGLE_APPLICATION_CREDENTIALS 환경변수가 설정되지 않았습니다.');
+    process.exit(1);
+  }
+
+  // 파일 존재 여부 확인
+  try {
+    require('fs').accessSync(serviceAccountPath);
+    console.log('Service account file found');
+  } catch (err) {
+    console.error('Service account file not found:', serviceAccountPath);
+    process.exit(1);
+  }
+
+  app = admin.initializeApp({
+    credential: admin.credential.cert(serviceAccountPath),
+    storageBucket: process.env.REACT_APP_STORAGE_BUCKET
+  });
+}
 
 const db = admin.firestore();
 const bucket = admin.storage().bucket();
 
-const app = express();
-const httpServer = createServer(app);
+// Storage bucket 연결 테스트
+bucket.exists().then(([exists]) => {
+  if (exists) {
+    console.log('Firebase Storage bucket connection successful');
+  } else {
+    console.error('Firebase Storage bucket not found');
+  }
+}).catch(err => {
+  console.error('Firebase Storage connection error:', err.message);
+});
+
+const expressApp = express();
+const httpServer = createServer(expressApp);
 const io = new Server(httpServer, {
   cors: {
     origin: ["http://localhost:3000", "http://10.150.10.160:3000"],
@@ -29,8 +63,8 @@ const io = new Server(httpServer, {
 
 const port = 3001;
 
-app.use(cors());
-app.use(express.json());
+expressApp.use(cors());
+expressApp.use(express.json());
 
 io.on('connection', (socket) => {
   console.log('a user connected:', socket.id);
@@ -39,8 +73,74 @@ io.on('connection', (socket) => {
   });
 });
 
+// 스크린샷 저장 함수 개선
+async function saveScreenshotToStorage(testId, screenshotBase64, stepIndex) {
+  try {
+    console.log(`[Server] Starting screenshot save process for test: ${testId}, step: ${stepIndex}`);
+
+    // Base64 데이터 검증
+    if (!screenshotBase64 || typeof screenshotBase64 !== 'string') {
+      throw new Error('Invalid screenshot data: screenshotBase64 is empty or not a string');
+    }
+
+    // Base64 헤더 제거 (data:image/png;base64, 부분이 있다면)
+    const base64Data = screenshotBase64.replace(/^data:image\/\w+;base64,/, '');
+
+    if (base64Data.length === 0) {
+      throw new Error('Screenshot base64 data is empty after header removal');
+    }
+
+    console.log(`[Server] Base64 data length: ${base64Data.length}`);
+
+    // Buffer 생성
+    const screenshotBuffer = Buffer.from(base64Data, 'base64');
+    console.log(`[Server] Buffer created, size: ${screenshotBuffer.length} bytes`);
+
+    // 파일명 생성
+    const timestamp = Date.now();
+    const filename = `screenshot-${testId}-step${stepIndex}-${timestamp}.png`;
+    const destination = `screenshots/${filename}`;
+
+    console.log(`[Server] Saving to destination: ${destination}`);
+
+    // Firebase Storage에 저장
+    const file = bucket.file(destination);
+
+    await file.save(screenshotBuffer, {
+      metadata: {
+        contentType: 'image/png',
+        metadata: {
+          testId: testId,
+          stepIndex: stepIndex.toString(),
+          timestamp: timestamp.toString()
+        }
+      },
+      resumable: false // 작은 파일의 경우 resumable 업로드 비활성화
+    });
+
+    console.log(`[Server] Screenshot successfully saved to Firebase Storage: ${destination}`);
+
+    // 공개 URL 생성 (또는 signed URL)
+    await file.makePublic(); // 공개 URL을 사용하는 경우
+    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${destination}`;
+
+    // 또는 signed URL 사용 (더 안전)
+    // const [signedUrl] = await file.getSignedUrl({
+    //   action: 'read',
+    //   expires: Date.now() + 100 * 365 * 24 * 60 * 60 * 1000 // 100년
+    // });
+
+    console.log(`[Server] Public URL generated: ${publicUrl}`);
+    return publicUrl;
+
+  } catch (error) {
+    console.error(`[Server] Error saving screenshot:`, error);
+    throw error;
+  }
+}
+
 // 스크립트 파일 목록을 가져오는 API
-app.get('/api/scripts', async (req, res) => {
+expressApp.get('/api/scripts', async (req, res) => {
   const scriptsDir = path.join(__dirname, 'scripts');
   try {
     const files = await fs.readdir(scriptsDir);
@@ -52,7 +152,7 @@ app.get('/api/scripts', async (req, res) => {
   }
 });
 
-app.post('/api/run-test/:testId', async (req, res) => {
+expressApp.post('/api/run-test/:testId', async (req, res) => {
   const { testId } = req.params;
   const startTime = Date.now();
   console.log(`Received request to run test: ${testId}`);
@@ -75,7 +175,7 @@ app.post('/api/run-test/:testId', async (req, res) => {
     const originalStepNames = testCaseData.templateSteps || (Array.isArray(testCaseData.steps) ? testCaseData.steps.map(s => s.name) : []);
     const initialSteps = originalStepNames.map(name => ({ name, status: 'Pending', duration: 0, error: null }));
     await testCaseRef.update({ status: 'In Progress', steps: initialSteps, lastRun: admin.firestore.FieldValue.serverTimestamp() });
-    
+
     res.status(202).json({ message: 'Test execution started' });
     io.emit('test:start', { testId });
 
@@ -97,7 +197,8 @@ app.post('/api/run-test/:testId', async (req, res) => {
       accumulatedData = reports.pop() || '';
 
       reports.forEach(async (reportStr) => {
-        if (!reportStr) return;
+        if (!reportStr.trim()) return;
+
         try {
           console.log(`[Server] Received raw string: "${reportStr}"`);
           const report = JSON.parse(reportStr);
@@ -117,29 +218,38 @@ app.post('/api/run-test/:testId', async (req, res) => {
               await testCaseRef.update({ steps });
               stepIndex++;
             }
+          } else if (report.type === 'debug:log') {
+            console.log(`[Playwright Debug] ${report.payload.message}`);
           } else if (report.type === 'screenshot:add') {
             console.log('[Server] Processing screenshot:add event...');
             const { failedStepIndex, screenshotBase64 } = report.payload;
-            const screenshotBuffer = Buffer.from(screenshotBase64, 'base64');
-            const destination = `screenshots/${testId}-${Date.now()}.png`;
-            const file = bucket.file(destination);
-            
-            await file.save(screenshotBuffer, { metadata: { contentType: 'image/png' } });
-            console.log(`[Server] Screenshot saved to bucket at: ${destination}`);
 
-            const [signedUrl] = await file.getSignedUrl({ action: 'read', expires: Date.now() + 100 * 365 * 24 * 60 * 60 * 1000 });
-            console.log(`[Server] Generated signed URL.`);
+            try {
+              // 개선된 스크린샷 저장 함수 호출
+              const screenshotUrl = await saveScreenshotToStorage(testId, screenshotBase64, failedStepIndex);
 
-            const doc = await testCaseRef.get();
-            if (!doc.exists) return;
-            const steps = doc.data().steps;
-            if (steps && steps[failedStepIndex]) {
-              steps[failedStepIndex].screenshotURL = signedUrl;
-              await testCaseRef.update({ steps });
-              console.log(`[Server] Firestore updated with screenshot URL for step index: "${failedStepIndex}"`);
-            } else {
-              console.error(`[Server] ERROR: Could not find step at index "${failedStepIndex}" in Firestore to update URL.`);
+              // Firestore에 URL 저장
+              const doc = await testCaseRef.get();
+              if (!doc.exists) {
+                console.error('[Server] Test case document not found');
+                return;
+              }
+
+              const steps = doc.data().steps;
+              if (steps && steps[failedStepIndex]) {
+                steps[failedStepIndex].screenshotURL = screenshotUrl;
+                await testCaseRef.update({ steps });
+                console.log(`[Server] Firestore updated with screenshot URL for step index: ${failedStepIndex}`);
+              } else {
+                console.error(`[Server] Could not find step at index ${failedStepIndex} in Firestore`);
+                console.log('[Server] Available steps:', steps?.map((s, i) => `${i}: ${s.name}`));
+              }
+
+            } catch (screenshotError) {
+              console.error('[Server] Screenshot processing failed:', screenshotError);
+              // 스크린샷 저장 실패해도 테스트는 계속 진행
             }
+
           } else if (report.type === 'test:end') {
             await testCaseRef.update({
               status: report.payload.status === 'passed' ? 'Completed' : 'Failed',
@@ -148,26 +258,29 @@ app.post('/api/run-test/:testId', async (req, res) => {
             io.emit('test:finish', { testId, status: report.payload.status });
           }
         } catch (e) {
-          console.error('[Server] ERROR processing report:', e);
+          console.error('[Server] Error processing report:', e);
+          console.log('[Server] Problematic report string:', reportStr);
         }
       });
     });
 
     testProcess.stderr.on('data', (data) => {
       errorOutput += data.toString();
+      console.error('[Playwright stderr]:', data.toString());
     });
 
     testProcess.on('close', async (code) => {
-      if (code !== 0 && errorOutput) {
-        console.error(`Playwright process exited with code ${code} and error: ${errorOutput}`);
+      console.log(`[Server] Playwright process exited with code: ${code}`);
+      if (code !== 0) {
+        console.error(`[Server] Playwright process failed with error: ${errorOutput}`);
         const testCaseRef = db.collection('testCases').doc(testId);
-        await testCaseRef.update({ status: 'Failed', lastResult: errorOutput });
+        await testCaseRef.update({ status: 'Failed', lastResult: errorOutput || 'Process exited with non-zero code' });
         io.emit('test:finish', { testId, status: 'Failed' });
       }
     });
 
   } catch (e) {
-    console.error('Error in run-test process:', e.message);
+    console.error('[Server] Error in run-test process:', e);
     const testCaseRef = db.collection('testCases').doc(testId);
     if (testCaseRef) {
       await testCaseRef.update({ status: 'Failed', lastResult: e.message });

@@ -1,19 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import { User, LogOut, Settings, Bell } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { translations } from '../data';
-import { auth } from '../firebase';
+import { auth, getNotifications } from '../firebase';
 import { signOut, onAuthStateChanged } from 'firebase/auth';
+import NotificationModal from './NotificationModal';
 
 const AdminHeader = () => {
   const t = translations.ko;
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [user, setUser] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+      if (currentUser) {
+        const unsubscribeNotifications = getNotifications((newNotifications) => {
+          setNotifications(newNotifications);
+          const unread = newNotifications.filter(
+            (n) => !n.readBy.includes(currentUser.uid)
+          ).length;
+          setUnreadCount(unread);
+        });
+        return () => unsubscribeNotifications();
+      }
     });
-    return () => unsubscribe();
+
+    return () => unsubscribeAuth();
   }, []);
 
   const handleLogout = async () => {
@@ -25,9 +41,9 @@ const AdminHeader = () => {
   };
 
   return (
-    <header className="relative z-10 w-full bg-white dark:bg-cool-gray-800 shadow-md border-b border-gray-200 dark:border-cool-gray-700 px-6 py-4 transition-colors duration-200">
+    <header className="relative z-30 w-full bg-white dark:bg-cool-gray-800 shadow-md border-b border-gray-200 dark:border-cool-gray-700 px-6 py-4 transition-colors duration-200">
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
+        <Link to="/" className="flex items-center space-x-4">
           <div className="p-2 bg-sky-600 rounded-lg shadow-lg">
             <img
               src="/images/icon.png"
@@ -36,20 +52,12 @@ const AdminHeader = () => {
             />
           </div>
           <h1 className="text-xl font-bold text-gray-800 dark:text-white tracking-wide">
-            TESTING <span className="text-sky-500">PLATFROM</span> 
+            TESTING <span className="text-sky-500">PLATFROM</span>
           </h1>
-        </div>
+        </Link>
 
         <div className="flex items-center space-x-6">
 
-          {/* System Status */}
-          <div className="flex items-center space-x-2">
-            <div className="relative">
-              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-              <div className="absolute inset-0 w-3 h-3 bg-green-500 rounded-full animate-ping opacity-75"></div>
-            </div>
-            <span className="text-sm font-medium text-green-600 dark:text-green-400">{t.systemOnline}</span>
-          </div>
 
           {/* User Profile */}
           <div className="relative">
@@ -85,12 +93,26 @@ const AdminHeader = () => {
           </div>
           {/* Notifications */}
           <div className="relative">
-            <button className="p-2  rounded-full hover:bg-gray-200 dark:hover:bg-cool-gray-600 transition-colors">
+            <button
+              onClick={() => setIsModalOpen(!isModalOpen)}
+              className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-cool-gray-600 transition-colors"
+            >
               <Bell className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-cool-gray-800">
+                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                </span>
+              )}
             </button>
           </div>
         </div>
       </div>
+      <NotificationModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        notifications={notifications}
+        userId={user?.uid}
+      />
     </header>
   );
 };

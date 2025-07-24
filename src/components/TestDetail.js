@@ -122,6 +122,17 @@ const TestDetail = ({ darkMode }) => {
     return <div className="flex-1 p-8 flex justify-center items-center"><Loader className="animate-spin" /></div>;
   }
 
+  const formatDuration = (milliseconds) => {
+    if (!milliseconds) return 'N/A';
+    const totalSeconds = milliseconds / 1000;
+    const minutes = Math.floor(totalSeconds / 60);
+    const remainingSeconds = Math.round(totalSeconds % 60);
+    if (minutes > 0) {
+      return `${minutes}분 ${remainingSeconds}초`;
+    }
+    return `${remainingSeconds}초`;
+  };
+
   return (
     <>
       <div className="flex-1 p-6 md:p-8 bg-cool-gray-50 dark:bg-cool-gray-900 overflow-y-auto">
@@ -198,24 +209,24 @@ const TestDetail = ({ darkMode }) => {
               <h2 className="text-lg font-bold text-gray-800 dark:text-white mb-4">Test Summary</h2>
               <ul className="space-y-3 text-sm">
                 <li className="flex justify-between">
-                  <span className="font-medium text-gray-500 dark:text-gray-400">Created At:</span>
+                  <span className="font-medium text-gray-500 dark:text-gray-400">생성일 :</span>
                   <span className="text-gray-800 dark:text-white">{testCase.createdAt?.toDate().toLocaleString() || 'N/A'}</span>
                 </li>
                 <li className="flex justify-between">
-                  <span className="font-medium text-gray-500 dark:text-gray-400">Last Run:</span>
+                  <span className="font-medium text-gray-500 dark:text-gray-400">마지막 실행 :</span>
                   <span className="text-gray-800 dark:text-white">{testCase.lastRun?.toDate().toLocaleString() || 'N/A'}</span>
                 </li>
                 <li className="flex justify-between">
-                  <span className="font-medium text-gray-500 dark:text-gray-400">Script:</span>
+                  <span className="font-medium text-gray-500 dark:text-gray-400">실행할 스크립트 :</span>
                   <span className="text-gray-800 dark:text-white">{testCase.scriptPath}</span>
                 </li>
                 <li className="flex justify-between">
-                  <span className="font-medium text-gray-500 dark:text-gray-400">Created By:</span>
+                  <span className="font-medium text-gray-500 dark:text-gray-400">생성한 사람 :</span>
                   <span className="text-gray-800 dark:text-white">{testCase.createdBy || 'N/A'}</span>
                 </li>
                 <li className="flex justify-between">
-                  <span className="font-medium text-gray-500 dark:text-gray-400">Duration:</span>
-                  <span className="text-gray-800 dark:text-white">{testCase.duration ? `${testCase.duration}s` : 'N/A'}</span>
+                  <span className="font-medium text-gray-500 dark:text-gray-400">테스트 시간 :</span>
+                  <span className="text-gray-800 dark:text-white">{formatDuration(testCase.duration)}</span>
                 </li>
               </ul>
               <button onClick={handleRunTest} className="w-full mt-6 px-4 py-2 bg-sky-600 text-white rounded-lg shadow-sm hover:bg-sky-700 transition-colors disabled:bg-gray-400" disabled={status === 'In Progress'}>

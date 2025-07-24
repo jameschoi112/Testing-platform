@@ -4,7 +4,7 @@ import { db } from '../firebase';
 import { collection, query, orderBy, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
 import { translations } from '../data';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MoreVertical, PlusCircle, Search, CheckCircle2, XCircle, Loader, HelpCircle, Play, Pause, Trash2, Clock } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import AddTestModal from './AddTestModal';
 import Tooltip from './Tooltip';
 
@@ -125,12 +125,7 @@ const TestList = ({ darkMode }) => {
 
   return (
     <div className="flex-1 p-6 md:p-8 bg-cool-gray-50 dark:bg-cool-gray-900 overflow-y-auto">
-      <motion.header
-        className="flex justify-between items-center mb-8"
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
+      <header className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-slate-800 to-sky-600 dark:from-white dark:to-sky-300 bg-clip-text text-transparent tracking-tight">
             {t.userManagement}
@@ -138,12 +133,12 @@ const TestList = ({ darkMode }) => {
           <p className="text-gray-500 dark:text-gray-400">{t.userManagementDesc}</p>
         </div>
         <div className="flex items-center space-x-4">
-          <motion.button onClick={() => setIsModalOpen(true)} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="flex items-center space-x-2 px-4 py-2 bg-sky-600 text-white rounded-lg shadow-sm hover:bg-sky-700 transition-colors">
+          <button onClick={() => setIsModalOpen(true)} className="flex items-center space-x-2 px-4 py-2 bg-sky-600 text-white rounded-lg shadow-sm hover:bg-sky-700 transition-colors">
             <PlusCircle size={20} />
             <span>Add Test</span>
-          </motion.button>
+          </button>
         </div>
-      </motion.header>
+      </header>
 
       <AddTestModal
         isOpen={isModalOpen}
@@ -151,12 +146,7 @@ const TestList = ({ darkMode }) => {
         onTestAdded={() => { /* onSnapshot이 자동으로 처리하므로 별도 호출 불필요 */ }}
       />
 
-      <motion.div
-        className="bg-white dark:bg-cool-gray-800 p-6 rounded-xl shadow-sm"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.1 }}
-      >
+      <div className="bg-white dark:bg-cool-gray-800 p-6 rounded-xl shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <div className="relative w-full max-w-xs">
             <input
@@ -196,7 +186,14 @@ const TestList = ({ darkMode }) => {
               </tr>
             </thead>
             <tbody>
-              {filteredTests.length === 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan="8" className="text-center py-10 text-gray-500 dark:text-gray-400">
+                    <Loader className="w-6 h-6 animate-spin mx-auto mb-2" />
+                    데이터를 불러오는 중...
+                  </td>
+                </tr>
+              ) : filteredTests.length === 0 ? (
                 <tr>
                   <td colSpan="8" className="text-center py-10 text-gray-500 dark:text-gray-400">
                     검색된 결과가 없습니다.
@@ -240,12 +237,8 @@ const TestList = ({ darkMode }) => {
                       </button>
                       <AnimatePresence>
                         {openDropdown.id === test.id && (
-                          <motion.div
+                          <div
                             ref={dropdownRef}
-                            initial={{ opacity: 0, y: openDropdown.direction === 'down' ? -10 : 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: openDropdown.direction === 'down' ? -10 : 10 }}
-                            transition={{ duration: 0.2 }}
                             className={`absolute right-0 w-48 bg-white dark:bg-cool-gray-700 rounded-md shadow-lg z-20 ${
                               openDropdown.direction === 'down' ? 'mt-2' : 'mb-2 bottom-full'
                             }`}
@@ -270,7 +263,7 @@ const TestList = ({ darkMode }) => {
                                 </button>
                               </li>
                             </ul>
-                          </motion.div>
+                          </div>
                         )}
                       </AnimatePresence>
                     </td>
@@ -306,7 +299,7 @@ const TestList = ({ darkMode }) => {
             </li>
           </ul>
         </nav>
-      </motion.div>
+      </div>
     </div>
   );
 };

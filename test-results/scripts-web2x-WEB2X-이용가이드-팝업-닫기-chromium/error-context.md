@@ -120,7 +120,7 @@
   - img
   - img "chatbot"
   - heading "WEB2X Admin" [level=5]
-  - text: 안녕하세요! WEB2X 챗봇입니다. 궁금하신 사항을 질문해주세요 오후 02:56 WEB2X가 무엇인가요? WEB2X 사용하면 블록체인 개발 필요 없나요? WEB2X 기존 서비스에 어떻게 연동할 수 있나요?
+  - text: 안녕하세요! WEB2X 챗봇입니다. 궁금하신 사항을 질문해주세요 오전 10:35 WEB2X가 무엇인가요? WEB2X 사용하면 블록체인 개발 필요 없나요? WEB2X 기존 서비스에 어떻게 연동할 수 있나요?
   - textbox "궁금하신 사항을 입력해주세요."
   - button:
     - img

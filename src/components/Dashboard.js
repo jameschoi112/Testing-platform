@@ -148,13 +148,15 @@ const Dashboard = ({ darkMode }) => {
   const [scheduleEvents, setScheduleEvents] = useState([]);
 
   useEffect(() => {
+    // Firebase에서 스케줄 데이터 실시간으로 가져오기
     const unsubscribe = onSnapshot(collection(db, 'schedules'), (snapshot) => {
       const fetchedEvents = snapshot.docs.map(doc => {
         const data = doc.data();
         return {
           id: doc.id,
           title: data.title,
-          type: data.type,
+          details: data.details,
+          color: data.color,
           start: data.start.toDate(),
           end: data.end.toDate(),
         };
@@ -269,7 +271,7 @@ const Dashboard = ({ darkMode }) => {
   }];
 
   return (
-    <div className="flex-1 p-6 md:p-8 bg-gradient-to-br from-slate-50 via-sky-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 overflow-y-auto relative">
+    <div className="flex-1 p-6 md:p-8 bg-gradient-to-br from-slate-50 via-sky-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 overflow-y-auto relative z-10">
       {/* 달력 스타일 주입 */}
       <style>{calendarStyles}</style>
 
@@ -402,7 +404,7 @@ const Dashboard = ({ darkMode }) => {
             <div className="p-6 flex-grow flex flex-col">
               <h3 className="text-lg font-semibold text-slate-700 dark:text-white mb-4 flex items-center space-x-2">
                 <CalendarIcon className="w-5 h-5 text-sky-500" />
-                <span>오늘 예약된 테스트</span>
+                <span>오늘 예정된 일정</span>
               </h3>
               <div className="flex-grow flex flex-col">
                 {getTodayScheduledTests().length > 0 ? (
@@ -410,15 +412,20 @@ const Dashboard = ({ darkMode }) => {
                     {getTodayScheduledTests().map((event, index) => (
                       <div key={event.id} className="flex items-center space-x-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50">
                         <div className="flex-shrink-0">
-                          <div className="w-2 h-2 rounded-full bg-sky-500"></div>
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: event.color }}
+                          ></div>
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-slate-700 dark:text-white truncate">
-                            {moment(event.start).format('HH:mm')} {event.title}
+                            {event.title}
                           </p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                            {event.type || '테스트'}
-                          </p>
+                          {event.details && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                              {event.details}
+                            </p>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -428,7 +435,7 @@ const Dashboard = ({ darkMode }) => {
                     <div className="text-center">
                       <CalendarIcon className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
                       <p className="text-sm text-slate-500 dark:text-slate-400">
-                        오늘 예약된 테스트가 없습니다
+                        오늘 예정된 일정이 없습니다
                       </p>
                     </div>
                   </div>
