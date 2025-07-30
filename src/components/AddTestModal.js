@@ -77,7 +77,7 @@ const AddTestModal = ({ isOpen, onClose, onTestAdded }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.testName || !formData.testUrl || !formData.scriptPath) {
-      alert('테스트 이름, URL, 실행 스크립트를 모두 선택해주세요.');
+      alert('테스트 이름, URL, 실행 스크립트는 필수 선택 사항입니다.');
       return;
     }
     setIsLoading(true);
@@ -138,8 +138,8 @@ const AddTestModal = ({ isOpen, onClose, onTestAdded }) => {
     projectName: '프로젝트 이름',
     cancel: '취소',
     add: '추가',
-    placeholderTestName: '예: 로그인 기능 테스트',
-    placeholderProjectName: '예: 알파 프로젝트',
+    placeholderTestName: '예. v3.5 리그레션 테스트',
+    placeholderProjectName: '예. 그리팅 프로젝트',
   };
 
   return (
